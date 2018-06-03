@@ -1,4 +1,4 @@
-﻿# neeo-squeezebox-adapter
+﻿# NEEO driver for Logitech Media Server / Squeezebox
 
 This is a NEEO driver for Logitech Media Server / Squeezebox.
 
