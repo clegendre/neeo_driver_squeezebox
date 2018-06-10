@@ -112,6 +112,63 @@ const controllerWithDiscovery = {
 		DebugLog(res.url);
 		return res.url;
 	},
+	getCurrentPlaylist: async function getCurrentPlaylist (deviceId, params) {
+		const listItems = await lms.getCurrentPlaylist(deviceId);
+		const list = neeoapi.buildBrowseList({
+			title: "Current Playlist",
+			totalMatchingItems: listItems.length,
+			browseIdentifier: params.browseIdentifier || '.',
+			offset: params.offset || 0,
+			limit: params.limit,
+		});
+		list.prepareItemsAccordingToOffsetAndLimit(listItems).map((item) => {
+			list.addListItem({
+				title: item.title,
+				label: item.artist,
+				thumbnailUri: item.url,
+				actionIdentifier: JSON.stringify({
+					action: "playIndex",
+					index: item.index
+				})
+			});
+		});
+		return list;
+	},
+	actionCurrentPlaylist: function actionCurrentPlaylist (deviceId, actionId) {
+		const actionIdentifier = JSON.parse(actionId.actionIdentifier);
+		if(actionIdentifier.action == "playIndex")
+		{
+			lms.playIndex(deviceId, actionIdentifier.index);
+		}
+	},
+	getFavoritesList: async function getFavoritesList (deviceId, params) {
+		const listItems = await lms.getFavorites(deviceId);
+		const list = neeoapi.buildBrowseList({
+			title: "Current Playlist",
+			totalMatchingItems: listItems.length,
+			browseIdentifier: params.browseIdentifier || '.',
+			offset: params.offset || 0,
+			limit: params.limit,
+		});
+		list.prepareItemsAccordingToOffsetAndLimit(listItems).map((item) => {
+			list.addListItem({
+				title: item.name,
+				thumbnailUri: item.url,
+				actionIdentifier: JSON.stringify({
+					action: "playFavorite",
+					id: item.name
+				})
+			});
+		});
+		return list;
+	},
+	actionFavoritesList: function actionFavoritesList (deviceId, actionId) {
+		const actionIdentifier = JSON.parse(actionId.actionIdentifier);
+		if(actionIdentifier.action == "playFavorite")
+		{
+			lms.playFavorite(deviceId, actionIdentifier.id);
+		}
+	},
 	discoverConectedPlayers: async function discoverConectedPlayers() {
 		let players = [];
 		try
@@ -136,7 +193,7 @@ const controllerWithDiscovery = {
 
 var squeezeDevice = neeoapi.buildDevice('LMS')
 	.setManufacturer('Logitech')
-	.setType('AUDIO')
+	.setType('MUSICPLAYER')
 
 	.addPowerStateSensor( { getter: controllerWithDiscovery.getPowerState})
 	.addButtonGroup('POWER')
@@ -171,8 +228,20 @@ var squeezeDevice = neeoapi.buildDevice('LMS')
 	.registerSubscriptionFunction((updateCallback) => {
 		updateCallbackReference = updateCallback;
 	})
-	  
-
+	.addDirectory({
+		name: 'Current Playlist',
+		label: 'Current Playlist'
+	}, {
+		getter: controllerWithDiscovery.getCurrentPlaylist,
+		action: controllerWithDiscovery.actionCurrentPlaylist
+	})
+	.addDirectory({
+		name: 'Favorites',
+		label: 'Favorites'
+	}, {
+		getter: controllerWithDiscovery.getFavoritesList,
+		action: controllerWithDiscovery.actionFavoritesList
+	})
 	.enableDiscovery({
 		headerText: 'Add network players you want to control',
 		description: 'The players have to be switched on'

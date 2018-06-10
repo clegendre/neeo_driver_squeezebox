@@ -91,6 +91,10 @@ function SqueezeServer(ipAddress, port, portTelnet) {
 		return this.requestAsync(playerId, ["playlist", "index", "+1"]);
 	};
 
+	this.playIndex = async function(playerId, index) {
+		return this.requestAsync(playerId, ["playlist", "index", index]);
+	};
+
 	this.setVolume = async function(playerId, volume) {
 		return this.requestAsync(playerId, ["mixer", "volume", volume]);
 	};
@@ -131,14 +135,56 @@ function SqueezeServer(ipAddress, port, portTelnet) {
 		let resArtist = await this.requestAsync(playerId, ["artist", "?"]);
 		let resAlbum = await this.requestAsync(playerId, ["album", "?"]);
 		let resTitle = await this.requestAsync(playerId, ["title", "?"]);
-		let res = await this.requestAsync(playerId, ["albums", "0", "10", "tags:j", `search:${resArtist.result._artist} ${resTitle.result._title} ${resAlbum.result._album}`]);
+		let url = await this.getCoverUrl(playerId, resArtist.result._artist, resAlbum.result._album, resTitle.result._title);
+		return Promise.resolve({
+			url,
+			artist: resArtist.result._artist || '',
+			title: resTitle.result._title || '',
+			album: resAlbum.result._album || ''
+		});
+	};
 
-		let url = `http://${this.ipAddress}:${this.port}/music/${res.result.albums_loop[0].artwork_track_id}/cover.jpg`;
-		return Promise.resolve({url, artist: resArtist.result._artist, title: resTitle.result._title, album: resAlbum.result._album});
+	this.getCoverUrl = async function(playerId, artist, album, title) {
+		let resRemoteStream = await this.requestAsync(playerId, ["remote", "?"]);
+		if(resRemoteStream.result._remote == 1)
+			return `http://${this.ipAddress}:${this.port}/music/current/cover.jpg?player=${playerId}?noCache=true`;
+		
+		let res = await this.requestAsync(playerId, ["albums", "0", "10", "tags:j", `search:${artist} ${album} ${title}`]);
+		return `http://${this.ipAddress}:${this.port}/music/${res.result.albums_loop[0].artwork_track_id}/cover.jpg`;
+	};
+
+	this.getFavorites = async function(playerId) {
+		let res = await this.requestAsync(playerId, ["favorites", "items", "0", "50", "want_url:1"]);
+		DebugLog(JSON.stringify(res.result.loop_loop));
+		return Promise.resolve(res.result.loop_loop);
 	};
 
 	this.playFavorite = async function(playerId, favorite) {
 		return this.requestAsync(playerId, ["favorites", "playlist", "play", "item_id:" + favorite]);
+	};
+
+	this.getCurrentPlaylist = async function(playerId) {
+		let resNumTracks = await this.requestAsync(playerId, ["playlist", "tracks", "?"]);
+		let resCurrentIndex = await this.requestAsync(playerId, ["playlist", "index", "?"]);
+		let playlist = [];
+		for (let i = 0; i < resNumTracks.result._tracks; i++) {
+			let resArtist = await this.requestAsync(playerId, ["playlist", "artist", i.toString(), "?"]);
+			let resAlbum = await this.requestAsync(playerId, ["playlist", "album", i.toString(), "?"]);
+			let resTitle = await this.requestAsync(playerId, ["playlist", "title", i.toString(), "?"]);
+			let url = await this.getCoverUrl(playerId, resArtist.result._artist, resAlbum.result._album, resTitle.result._title);
+
+			if(i == resCurrentIndex.result._index)
+				resTitle.result._title = "PLAYING " + resTitle.result._title;
+
+			playlist.push({
+				artist: resArtist.result._artist,
+				title: resTitle.result._title,
+				album: resAlbum.result._album,
+				index: i,
+				url
+			});
+		}
+		return playlist;
 	};
 };
 
