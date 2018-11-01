@@ -13,10 +13,13 @@ config.lms.port = 9000;
 config.lms.portTelnet = 9090;
 
 // Set Favorites
-config.squeeze.favorites = [
-{
-	name : 'Rock Antenne'
-}];
+// config.squeeze.favorites = [
+// {
+// 	name : 'Fav1'
+// },{
+// 	name : 'Fav2'
+// }];
+config.squeeze.favorites = [];
 
 //-------------------------------------------
 module.exports = config;
