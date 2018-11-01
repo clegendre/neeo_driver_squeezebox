@@ -112,8 +112,24 @@ function SqueezeServer(ipAddress, port, portTelnet) {
 		return this.requestAsync(playerId, ["randomplay", "tracks"]);
 	};
 
+	this.playArtistAtIndex = async function(playerId, albumId, index) {
+		return this.requestAsync(playerId, ["playlistcontrol", "cmd:load", "artist_id:" + albumId, "play_index:" + index]);
+	};
+
 	this.playRandomAlbum = async function(playerId) {
 		return this.requestAsync(playerId, ["randomplay", "albums"]);
+	};
+
+	this.playAlbum = async function(playerId, albumId) {
+		return this.requestAsync(playerId, ["playlistcontrol", "cmd:load", "album_id:" + albumId]);
+	};
+
+	this.playAlbumAtIndex = async function(playerId, albumId, index) {
+		return this.requestAsync(playerId, ["playlistcontrol", "cmd:load", "album_id:" + albumId, "play_index:" + index]);
+	};
+
+	this.playTitle = async function(playerId, trackId) {
+		return this.requestAsync(playerId, ["playlistcontrol", "cmd:load", "track_id:" + trackId]);
 	};
 
 	this.getTitle = async function(playerId) {
@@ -145,11 +161,15 @@ function SqueezeServer(ipAddress, port, portTelnet) {
 	};
 
 	this.getCoverUrl = async function(playerId, artist, album, title) {
+		artist = removeUnsupportedChar(artist);
+		album = removeUnsupportedChar(album);
+		title = removeUnsupportedChar(title);
 		let resRemoteStream = await this.requestAsync(playerId, ["remote", "?"]);
 		if(resRemoteStream.result._remote == 1)
 			return `http://${this.ipAddress}:${this.port}/music/current/cover.jpg?player=${playerId}?noCache=true`;
 		
 		let res = await this.requestAsync(playerId, ["albums", "0", "10", "tags:j", `search:${artist} ${album} ${title}`]);
+		DebugLog(JSON.stringify(res.result.albums_loop));
 		return `http://${this.ipAddress}:${this.port}/music/${res.result.albums_loop[0].artwork_track_id}/cover.jpg`;
 	};
 
@@ -157,6 +177,18 @@ function SqueezeServer(ipAddress, port, portTelnet) {
 		let res = await this.requestAsync(playerId, ["favorites", "items", "0", "50", "want_url:1"]);
 		DebugLog(JSON.stringify(res.result.loop_loop));
 		return Promise.resolve(res.result.loop_loop);
+	};
+
+	this.getApps = async function(playerId) {
+		let res = await this.requestAsync(playerId, ["apps", "0", "50"]);
+		DebugLog(JSON.stringify(res.result.appss_loop));
+		return Promise.resolve(res.result.appss_loop);
+	};
+
+	this.getRadios = async function(playerId) {
+		let res = await this.requestAsync(playerId, ["radios", "0", "50"]);
+		DebugLog(JSON.stringify(res.result.radioss_loop));
+		return Promise.resolve(res.result.radioss_loop);
 	};
 
 	this.playFavorite = async function(playerId, favorite) {
@@ -184,9 +216,47 @@ function SqueezeServer(ipAddress, port, portTelnet) {
 				url
 			});
 		}
+		DebugLog("Current Playlist: " + JSON.stringify(playlist));
 		return playlist;
 	};
+
+	this.getDatabaseArtists = async function(playerId) {
+		let res = await this.requestAsync(playerId, ["artists", "0", "10000"]);
+		DebugLog("Database Artists: " + JSON.stringify(res.result.artists_loop));
+		return Promise.resolve(res.result.artists_loop);
+	};
+
+	this.getDatabaseAlbumsOfArtist = async function(playerId, artistId) {
+		let res = await this.requestAsync(playerId, ["albums", "0", "100", "artist_id:" + artistId, "tags:jl"]);
+
+		let mappedRes = [];
+		res.result.albums_loop.map((item) => {
+			mappedRes.push({
+				id: item.id,
+				album: item.album,
+				url: `http://${this.ipAddress}:${this.port}/music/${item.artwork_track_id}/cover.jpg`
+			});
+		});
+		DebugLog("Database Albums of Artist: " + JSON.stringify(mappedRes));
+		return Promise.resolve(mappedRes);
+	};
+
+	this.getDatabaseSongsOfAlbum = async function(playerId, albumId) {
+		let res = await this.requestAsync(playerId, ["songs", "0", "10000", "album_id:" + albumId, "sort:albumtrack"]);
+		DebugLog("Songs of Album: " + JSON.stringify(res.result.titles_loop));
+		return Promise.resolve(res.result.titles_loop);
+	};
+
+	this.getDatabaseSongsOfArtist = async function(playerId, artistId) {
+		let res = await this.requestAsync(playerId, ["songs", "0", "10000", "artist_id:" + artistId, "sort:albumtrack"]);
+		DebugLog("Songs of Artist: " + JSON.stringify(res.result.titles_loop));
+		return Promise.resolve(res.result.titles_loop);
+	};
 };
+
+const removeUnsupportedChar = (str) => {
+	return str.replace("–", " ").replace("’", " ");
+}
 
 const DebugLog = (output) => {
 	console.log("SqueezeServer: " + output);

@@ -4,6 +4,21 @@ const SqueezeServer = require('./server');
 
 const lms = new SqueezeServer(config.lms.ipAddress, config.lms.port, config.lms.portTelnet);
 
+const listLibraryBaseMenu = neeoapi.buildBrowseList({
+								title: `Music Library`,
+								totalMatchingItems: 1,
+								browseIdentifier: ".",
+								offset: 0,
+								limit: 10
+							})
+							.addListItem({
+								title: "Artists",
+								//thumbnailUri: images.icon_music,
+								browseIdentifier: JSON.stringify({
+									path: "artists"
+								})
+							});
+
 let updateCallbackReference;
 const newSongCallback = async (deviceId) =>{
 	let songInfo = await lms.getSongInfo(deviceId);
@@ -141,10 +156,157 @@ const controllerWithDiscovery = {
 			lms.playIndex(deviceId, actionIdentifier.index);
 		}
 	},
+	getLibraryList: async function getLibraryList (deviceId, params) {
+		let browseIdentifier;
+		if(params.browseIdentifier)
+		{
+			browseIdentifier = JSON.parse(params.browseIdentifier);
+		}else{
+			browseIdentifier = {path: "."};
+		}
+		console.log ("BROWSEING", browseIdentifier.path);
+
+		if (browseIdentifier.path == "artists")
+		{
+			const listItems = await lms.getDatabaseArtists(deviceId);
+			const list = neeoapi.buildBrowseList({
+				title: "Artists",
+				totalMatchingItems: listItems.length,
+				browseIdentifier: params.browseIdentifier || '.',
+				offset: params.offset || 0,
+				limit: params.limit,
+			});
+			list.prepareItemsAccordingToOffsetAndLimit(listItems).map((item) => {
+				list.addListItem({
+					title: item.artist,
+					//label: item.artist, ?? MBMB Addition Info?
+					//thumbnailUri: item.url,	?? MBMB Cover ?
+					browseIdentifier: JSON.stringify({
+						path: "artists/albums",
+						artistId: item.id,
+						artistName: item.artist
+					})
+				});
+			});
+			return list;
+		}else if (browseIdentifier.path == "artists/albums")
+		{
+			const listItems = await lms.getDatabaseAlbumsOfArtist(deviceId, browseIdentifier.artistId);
+			let numOfItems = listItems.length;
+			if(numOfItems > 1)
+				numOfItems++;
+			const list = neeoapi.buildBrowseList({
+				title: browseIdentifier.artistName,
+				totalMatchingItems: numOfItems,
+				browseIdentifier: params.browseIdentifier || '.',
+				offset: params.offset || 0,
+				limit: params.limit,
+			});
+			list.prepareItemsAccordingToOffsetAndLimit(listItems).map((item) => {
+				if(numOfItems > 1)
+				{
+					numOfItems = 0; //Only add one time
+					list.addListItem({
+						title: "All Albums",
+						//label: item.artist, ?? MBMB Addition Info?
+						//thumbnailUri: item.url,	?? MBMB Cover ?
+						browseIdentifier: JSON.stringify({
+							path: "artists/albums/titles",
+							artistId: browseIdentifier.artistId,
+							artistName: browseIdentifier.artistName,
+							albumId: "_all",
+							albumName: "All Albums"
+						})
+					});
+				}
+				list.addListItem({
+					title: item.album,
+					//label: item.artist, ?? MBMB Addition Info?
+					thumbnailUri: item.url,
+					browseIdentifier: JSON.stringify({
+						path: "artists/albums/titles",
+						artistId: browseIdentifier.artistId,
+						artistName: browseIdentifier.artistName,
+						albumId: item.id,
+						albumName: item.album,
+						albumUrl: item.url
+					})
+				});
+			});
+			return list;
+		}else if (browseIdentifier.path == "artists/albums/titles")
+		{
+			let listItems;
+			let listIdx = 0;
+			if(browseIdentifier.albumId == "_all")
+				listItems = await lms.getDatabaseSongsOfArtist(deviceId, browseIdentifier.artistId);
+			else
+				listItems = await lms.getDatabaseSongsOfAlbum(deviceId, browseIdentifier.albumId);
+			const list = neeoapi.buildBrowseList({
+				title: browseIdentifier.albumName,
+				totalMatchingItems: listItems.length,
+				browseIdentifier: params.browseIdentifier || '.',
+				offset: params.offset || 0,
+				limit: params.limit,
+			});
+			list.prepareItemsAccordingToOffsetAndLimit(listItems).map((item) => {
+				if(browseIdentifier.albumId == "_all")
+				{
+					list.addListItem({
+						title: item.title,
+						label: item.album,
+						thumbnailUri: browseIdentifier.albumUrl,
+						actionIdentifier: JSON.stringify({
+							path: "artists/albums/titles",
+							artistId: browseIdentifier.artistId,
+							artistName: browseIdentifier.artistName,
+							albumId: browseIdentifier.albumId,
+							albumName: browseIdentifier.albumName,
+							albumUrl: browseIdentifier.albumUrl,
+							titleId: item.id,
+							titleName: item.title,
+							listIndex: listIdx++
+						})
+					});
+				}else{
+					list.addListItem({
+						title: item.title,
+						//label: item.album,
+						thumbnailUri: browseIdentifier.albumUrl,
+						actionIdentifier: JSON.stringify({
+							path: "artists/albums/titles",
+							artistId: browseIdentifier.artistId,
+							artistName: browseIdentifier.artistName,
+							albumId: browseIdentifier.albumId,
+							albumName: browseIdentifier.albumName,
+							albumUrl: browseIdentifier.albumUrl,
+							titleId: item.id,
+							titleName: item.title,
+							listIndex: listIdx++
+						})
+					});
+				}
+			});
+			return list;
+		}
+		return listLibraryBaseMenu;
+	},
+	actionLibraryList: function actionLibraryList (deviceId, actionId) {
+		let actionIdentifier = JSON.parse(actionId.actionIdentifier);
+		if (actionIdentifier.path == "artists/albums/titles")
+		{
+			if(actionIdentifier.albumId == "_all")
+			{
+				lms.playArtistAtIndex(deviceId, actionIdentifier.artistId, actionIdentifier.listIndex);
+			}else{
+				lms.playAlbumAtIndex(deviceId, actionIdentifier.albumId, actionIdentifier.listIndex);
+			}
+		}
+	},
 	getFavoritesList: async function getFavoritesList (deviceId, params) {
 		const listItems = await lms.getFavorites(deviceId);
 		const list = neeoapi.buildBrowseList({
-			title: "Current Playlist",
+			title: "Favorites",
 			totalMatchingItems: listItems.length,
 			browseIdentifier: params.browseIdentifier || '.',
 			offset: params.offset || 0,
@@ -234,6 +396,13 @@ var squeezeDevice = neeoapi.buildDevice('LMS')
 	}, {
 		getter: controllerWithDiscovery.getCurrentPlaylist,
 		action: controllerWithDiscovery.actionCurrentPlaylist
+	})
+	.addDirectory({
+		name: 'Music Library',
+		label: 'Music Library'
+	}, {
+		getter: controllerWithDiscovery.getLibraryList,
+		action: controllerWithDiscovery.actionLibraryList
 	})
 	.addDirectory({
 		name: 'Favorites',
