@@ -166,7 +166,7 @@ const controllerWithDiscovery = {
 		}
 		console.log ("BROWSEING", browseIdentifier.path);
 
-		if (browseIdentifier.path == "artists")
+		if (browseIdentifier.path == "artists" || browseIdentifier.path == ".")
 		{
 			const listItems = await lms.getDatabaseArtists(deviceId);
 			const list = neeoapi.buildBrowseList({
