@@ -194,9 +194,10 @@ class Controller {
     /**
      * This is called internaly to update the state of the driver from the player state.
      */
-    update(){
-        this.updateStatus().then( this.updateStatusComponents.bind( this ) );
-        this.updateSong().then( this.updateSongComponents.bind( this ) );
+    async update(){
+        await this.updateStatus();
+        await this.updateSong();
+        this.updateSongComponents();
     }
 
     /**
@@ -206,7 +207,9 @@ class Controller {
         return new Promise( (resolve, reject) => {
             this.player.getStatus( ({result}) => {
                 this._status = result;
-                this._status.volume = result['mixer volume'];
+                if( result ){
+                    this._status.volume = result['mixer volume'];
+                }
                 resolve( this._status );
             });
         });
